@@ -7,7 +7,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# 安裝依賴
+# 安裝 Node.js (LTS) — 供解析 window.__NUXT__ 使用
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# 安裝 Python 依賴
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
