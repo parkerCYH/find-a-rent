@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import random
 import sys
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -115,9 +117,13 @@ async def trigger_crawl(
 ):
     """
     觸發爬蟲並執行推播流程。
-    爬蟲在背景執行，立即回傳 202 accepted。
+    接收請求後隨機延遲 0~120 秒，避免被識別為機器人。
     """
     logger.info(f"收到 /trigger 請求: {body.model_dump()}")
+
+    delay = random.uniform(0, 120)
+    logger.info(f"隨機延遲 {delay:.1f} 秒後開始執行...")
+    await asyncio.sleep(delay)
 
     try:
         result = run_crawl_pipeline(
