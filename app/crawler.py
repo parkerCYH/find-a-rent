@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 import subprocess
 import tempfile
 import os
@@ -14,11 +15,22 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://rent.591.com.tw"
-UA = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/122.0.0.0 Safari/537.36"
-)
+
+# 多組 User-Agent，每次隨機擇一
+UA_POOL = [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+]
+
+_ACCEPT_LANGUAGES = [
+    "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+    "zh-TW,zh;q=0.8,en;q=0.6",
+    "en-US,en;q=0.9,zh-TW;q=0.8,zh;q=0.7",
+    "zh-TW,zh;q=0.9",
+]
 
 
 def _build_list_url(
@@ -32,7 +44,16 @@ def _build_list_url(
     bathroom: Optional[str] = None,
     notice: Optional[str] = None,
 ) -> str:
-    params = [f"region={region}", "order=posttime", "orderType=desc"]
+    # 加入時間戳與隨機數作為對筒 cache-bust參數
+    ts = int(time.time())
+    noise = random.randint(100000, 999999)
+    params = [
+        f"region={region}",
+        "order=posttime",
+        "orderType=desc",
+        f"t={ts}",
+        f"_={noise}",
+    ]
     if section:
         params.append(f"section={section}")
     # 租金：591 格式為 price=min_max
@@ -154,11 +175,20 @@ def fetch_houses(
         bathroom=settings.BATHROOM or None,
         notice=settings.NOTICE or None,
     )
-    logger.info(f"抓取 591 列表頁: {list_url}")
+    ua = random.choice(UA_POOL)
+    accept_lang = random.choice(_ACCEPT_LANGUAGES)
+    headers = {
+        "User-Agent": ua,
+        "Accept-Language": accept_lang,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    }
+    logger.info(f"抓取 591 列表頁 (UA: {ua[:40]}...): {list_url}")
 
     try:
         with httpx.Client(timeout=20, follow_redirects=True) as client:
-            resp = client.get(list_url, headers={"User-Agent": UA})
+            resp = client.get(list_url, headers=headers)
             resp.raise_for_status()
             html = resp.text
     except Exception as e:
