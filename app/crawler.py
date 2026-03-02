@@ -33,47 +33,11 @@ _ACCEPT_LANGUAGES = [
 ]
 
 
-def _build_list_url(
-    region: int,
-    section: Optional[str] = None,
-    price_min: Optional[int] = None,
-    price_max: Optional[int] = None,
-    layout: Optional[str] = None,
-    other: Optional[str] = None,
-    shape: Optional[str] = None,
-    bathroom: Optional[str] = None,
-    notice: Optional[str] = None,
-) -> str:
-    # 加入時間戳與隨機數作為對筒 cache-bust參數
+def _build_url_from_query(raw_query: str) -> str:
+    """將 .env 中預組好的 query string 加上 cache-bust 參數後組成完整 URL"""
     ts = int(time.time())
     noise = random.randint(100000, 999999)
-    params = [
-        f"region={region}",
-        "order=posttime",
-        "orderType=desc",
-        f"t={ts}",
-        f"_={noise}",
-    ]
-    if section:
-        params.append(f"section={section}")
-    # 租金：591 格式為 price=min_max
-    if price_min and price_min > 0 and price_max and price_max > 0:
-        params.append(f"price={price_min}_{price_max}")
-    elif price_min and price_min > 0:
-        params.append(f"price={price_min}_")
-    elif price_max and price_max > 0:
-        params.append(f"price=0_{price_max}")
-    if layout:
-        params.append(f"layout={layout}")
-    if other:
-        params.append(f"other={other}")
-    if shape:
-        params.append(f"shape={shape}")
-    if bathroom:
-        params.append(f"bathroom={bathroom}")
-    if notice:
-        params.append(f"notice={notice}")
-    return f"{BASE_URL}/list?" + "&".join(params)
+    return f"{BASE_URL}/list?{raw_query}&t={ts}&_={noise}"
 
 
 def _extract_nuxt_expr(html: str) -> str:
@@ -155,26 +119,9 @@ def _parse_item(row: dict) -> Optional[HouseItem]:
         return None
 
 
-def fetch_houses(
-    region: Optional[int] = None,
-    section: Optional[str] = None,
-    price_min: Optional[int] = None,
-    price_max: Optional[int] = None,
-    max_pages: int = 5,  # 保留參數相容性，目前 SSR 方案固定 1 頁
-) -> list[HouseItem]:
- 
-    region = region or settings.REGION
-    list_url = _build_list_url(
-        region=region,
-        section=section or (settings.SECTION if settings.SECTION else None),
-        price_min=price_min if price_min is not None else (settings.PRICE_MIN or None),
-        price_max=price_max if price_max is not None else (settings.PRICE_MAX or None),
-        layout=settings.LAYOUT or None,
-        other=settings.OTHER or None,
-        shape=settings.SHAPE or None,
-        bathroom=settings.BATHROOM or None,
-        notice=settings.NOTICE or None,
-    )
+def _fetch_single_query(raw_query: str) -> list[HouseItem]:
+    """針對單一 query string 抓取並解析房源清單"""
+    list_url = _build_url_from_query(raw_query)
     ua = random.choice(UA_POOL)
     accept_lang = random.choice(_ACCEPT_LANGUAGES)
     headers = {
@@ -222,6 +169,22 @@ def fetch_houses(
         item = _parse_item(row)
         if item:
             houses.append(item)
-
-    logger.info(f"爬蟲完成，成功解析 {len(houses)} 筆房源")
     return houses
+
+
+def fetch_houses() -> list[HouseItem]:
+    """依序執行所有非空的 QUERY_N，合併結果並以 post_id 去重"""
+    queries = [q.strip() for q in [settings.QUERY_1, settings.QUERY_2] if q.strip()]
+    if not queries:
+        logger.warning("未設定任何搜尋條件 (QUERY_1, QUERY_2 皆為空)，略過爬蟲")
+        return []
+
+    seen: dict[str, HouseItem] = {}
+    for idx, raw_query in enumerate(queries, start=1):
+        logger.info(f"▶ 執行第 {idx} 組查詢: {raw_query}")
+        for item in _fetch_single_query(raw_query):
+            if item.post_id not in seen:
+                seen[item.post_id] = item
+
+    logger.info(f"爬蟲完成，共 {len(queries)} 組查詢，合計 {len(seen)} 筆不重複房源")
+    return list(seen.values())
