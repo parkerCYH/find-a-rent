@@ -3,6 +3,7 @@ import logging
 import random
 import sys
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone, timedelta
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
@@ -10,7 +11,7 @@ from pydantic import BaseModel
 from app.config import settings
 from app.crawler import fetch_houses
 from app.gsheet import get_existing_ids, append_houses
-from app.line_notify import push_new_houses
+from app.discord_webhook import push_new_houses
 
 # ── 日誌設定 ───────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -24,14 +25,14 @@ logger = logging.getLogger(__name__)
 # ── FastAPI App ────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🏠 591 監控系統啟動")
+    logger.info("🏠 監控系統啟動")
     yield
-    logger.info("🏠 591 監控系統關閉")
+    logger.info("🏠 監控系統關閉")
 
 
 app = FastAPI(
-    title="591 租屋監控系統",
-    description="自動爬取 591 新房源並推播至 LINE 群組",
+    title="租屋監控系統",
+    description="自動爬取新房源並推播至 Discord 頻道",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -56,7 +57,7 @@ def run_crawl_pipeline() -> dict:
     1. 從 Google Sheet 讀取已存在的 post_id set
     2. 執行爬蟲取得房源清單（依 QUERY_1, QUERY_2）
     3. 比對 set，篩選出新房源
-    4. 推播至 LINE 並寫入 Google Sheet
+    4. 推播至 Discord 並寫入 Google Sheet
     """
     logger.info("▶ 開始執行爬蟲流程")
 
@@ -83,7 +84,7 @@ def run_crawl_pipeline() -> dict:
 @app.get("/", tags=["Health"])
 def health_check():
     """Render 存活偵測端點"""
-    return {"status": "ok", "service": "591 租屋監控系統"}
+    return {"status": "ok", "service": "租屋監控系統"}
 
 
 @app.post("/trigger", response_model=TriggerResponse, tags=["Crawler"])
@@ -94,8 +95,17 @@ async def trigger_crawl(
     """
     觸發爬蟲並執行推播流程。
     接收請求後隨機延遲 0~120 秒，避免被識別為機器人。
+    晚上 21:00 ~ 隔天 10:00（台灣時間）期間不執行。
     """
     logger.info(f"收到 /trigger 請求: {body.model_dump()}")
+
+    # ── 靜音時段檢查（台灣時間 21:00 ~ 10:00）────────────────────────
+    tw_now = datetime.now(timezone(timedelta(hours=8)))
+    hour = tw_now.hour
+    if hour >= 21 or hour < 10:
+        msg = f"Quiet hours ({tw_now.strftime('%H:%M')} CST) — skipping crawl. No point calling landlords now."
+        logger.info(msg)
+        return TriggerResponse(status="skipped", fetched=0, new=0, message=msg)
 
     delay = random.uniform(0, 120)
     logger.info(f"隨機延遲 {delay:.1f} 秒後開始執行...")

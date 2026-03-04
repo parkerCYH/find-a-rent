@@ -14,8 +14,6 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://rent.591.com.tw"
-
 # 多組 User-Agent，每次隨機擇一
 UA_POOL = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -37,7 +35,7 @@ def _build_url_from_query(raw_query: str) -> str:
     """將 .env 中預組好的 query string 加上 cache-bust 參數後組成完整 URL"""
     ts = int(time.time())
     noise = random.randint(100000, 999999)
-    return f"{BASE_URL}/list?{raw_query}&t={ts}&_={noise}"
+    return f"{settings.BASE_URL}/list?{raw_query}&t={ts}&_={noise}"
 
 
 def _extract_nuxt_expr(html: str) -> str:
@@ -90,11 +88,11 @@ def _parse_item(row: dict) -> Optional[HouseItem]:
             return None
 
         price_val = row.get("price", 0)
-        url = row.get("url") or f"{BASE_URL}/{post_id}"
+        url = row.get("url") or f"{settings.BASE_URL}/{post_id}"
 
         # 確保是完整 URL
         if url.startswith("/"):
-            url = BASE_URL + url
+            url = settings.BASE_URL + url
 
         photo_list = row.get("photoList", [])
         image_url = photo_list[0] if photo_list else None
@@ -131,7 +129,7 @@ def _fetch_single_query(raw_query: str) -> list[HouseItem]:
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
     }
-    logger.info(f"抓取 591 列表頁 (UA: {ua[:40]}...): {list_url}")
+    logger.info(f"抓取列表頁 (UA: {ua[:40]}...): {list_url}")
 
     try:
         with httpx.Client(timeout=20, follow_redirects=True) as client:
