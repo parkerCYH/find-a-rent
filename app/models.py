@@ -2,6 +2,8 @@ from pydantic import BaseModel, field_validator
 from typing import Optional
 import re
 
+from app.config import settings
+
 
 class HouseItem(BaseModel):
     post_id: str
@@ -44,4 +46,4 @@ class HouseItem(BaseModel):
 
     @property
     def short_url(self) -> str:
-        return f"https://rent.591.com.tw/rent-detail-{self.post_id}.html"
+        return f"{settings.BASE_URL}/rent-detail-{self.post_id}.html"

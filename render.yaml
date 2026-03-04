@@ -4,10 +4,8 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     envVars:
-      - key: LINE_CHANNEL_ACCESS_TOKEN
+      - key: DISCORD_WEBHOOK_URL
         sync: false          # 從 Render dashboard 手動填入
-      - key: LINE_GROUP_ID
-        sync: false
       - key: GOOGLE_SHEET_ID
         sync: false
       - key: GCP_SERVICE_ACCOUNT_FILE
