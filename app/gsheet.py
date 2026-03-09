@@ -34,6 +34,10 @@ HEADERS = [
     "POST ID",     # M - 唯一值
 ]
 
+BLACKLIST_HEADERS = [
+    "黑名單標題",   # A - 要過濾的關鍵字
+]
+
 
 def _hyperlink(url: str, label: str) -> str:
     """產生 Google Sheets HYPERLINK 公式"""
@@ -125,3 +129,33 @@ def append_houses(items: list[HouseItem]) -> int:
     ws.append_rows(rows, value_input_option="USER_ENTERED")
     logger.info(f"批次寫入 {len(rows)} 筆房源至 Google Sheet")
     return len(rows)
+
+
+def get_blacklist_titles() -> set[str]:
+    """
+    讀取黑名單工作表中的所有標題關鍵字，回傳 set（O(1) 查找）
+    如果工作表不存在，會自動創建
+    """
+    creds = Credentials.from_service_account_file(
+        settings.GCP_SERVICE_ACCOUNT_FILE,
+        scopes=SCOPES,
+    )
+    gc = gspread.authorize(creds)
+    spreadsheet = gc.open_by_key(settings.GOOGLE_SHEET_ID)
+
+    try:
+        worksheet = spreadsheet.worksheet(settings.BLACKLIST_SHEET_NAME)
+    except gspread.WorksheetNotFound:
+        worksheet = spreadsheet.add_worksheet(
+            title=settings.BLACKLIST_SHEET_NAME, rows="100", cols="5"
+        )
+        worksheet.append_row(BLACKLIST_HEADERS)
+        logger.info(f"已建立新黑名單工作表: {settings.BLACKLIST_SHEET_NAME}")
+
+    # 讀取 A 欄所有值
+    all_values = worksheet.col_values(1)  # A 欄 = 黑名單標題
+
+    # 跳過標題列，去除前後空白
+    keywords = {v.strip() for v in all_values[1:] if v.strip()}
+    logger.info(f"黑名單工作表載入 {len(keywords)} 個關鍵字")
+    return keywords

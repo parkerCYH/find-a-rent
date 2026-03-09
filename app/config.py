@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     GCP_SERVICE_ACCOUNT_FILE: str = "service_account.json"
     GOOGLE_SHEET_ID: str = ""
     SHEET_NAME: str = "houses"
+    BLACKLIST_SHEET_NAME: str = "black_list"
 
     BASE_URL: str = ""
 
