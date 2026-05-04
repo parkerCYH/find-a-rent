@@ -12,6 +12,7 @@ from app.config import settings
 from app.crawler import fetch_houses
 from app.gsheet import get_existing_ids, append_houses, get_blacklist_titles, get_blacklist_addrs
 from app.discord_webhook import push_new_houses
+from app.filters import EXCLUDED_FLOORS
 
 # ── 日誌設定 ───────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -53,6 +54,8 @@ class TriggerResponse(BaseModel):
 
 
 # ── 核心流程 ───────────────────────────────────────────────────────────
+
+
 def run_crawl_pipeline() -> dict:
     """
     完整去重與推播流程：
@@ -73,11 +76,12 @@ def run_crawl_pipeline() -> dict:
     # Post ID 去重
     new_houses = [h for h in houses if h.post_id not in existing_ids]
     
-    # 黑名單過濾（標題 + 地址）
+    # 黑名單過濾（標題 + 地址）+ 排除特定樓層
     filtered_houses = [
         h for h in new_houses
         if not any(keyword in h.title for keyword in blacklist_titles)
         and not any(keyword in h.address for keyword in blacklist_addrs)
+        and not h.floor.strip().upper() in EXCLUDED_FLOORS
     ]
     
     blacklisted_count = len(new_houses) - len(filtered_houses)
