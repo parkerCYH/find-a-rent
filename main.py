@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.config import settings
 from app.crawler import fetch_houses
-from app.gsheet import get_existing_ids, append_houses, get_blacklist_titles
+from app.gsheet import get_existing_ids, append_houses, get_blacklist_titles, get_blacklist_addrs
 from app.discord_webhook import push_new_houses
 
 # ── 日誌設定 ───────────────────────────────────────────────────────────
@@ -67,15 +67,17 @@ def run_crawl_pipeline() -> dict:
 
     existing_ids = get_existing_ids()
     blacklist_titles = get_blacklist_titles()
+    blacklist_addrs = get_blacklist_addrs()
     houses = fetch_houses()
 
     # Post ID 去重
     new_houses = [h for h in houses if h.post_id not in existing_ids]
     
-    # 黑名單過濾
+    # 黑名單過濾（標題 + 地址）
     filtered_houses = [
         h for h in new_houses
         if not any(keyword in h.title for keyword in blacklist_titles)
+        and not any(keyword in h.address for keyword in blacklist_addrs)
     ]
     
     blacklisted_count = len(new_houses) - len(filtered_houses)

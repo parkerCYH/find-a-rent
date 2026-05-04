@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     GOOGLE_SHEET_ID: str = ""
     SHEET_NAME: str = "houses"
     BLACKLIST_SHEET_NAME: str = "black_list"
+    BLACKLIST_ADDR_SHEET_NAME: str = "black_addr_list"
 
     BASE_URL: str = ""
 
